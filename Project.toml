@@ -3,6 +3,9 @@ uuid = "e7fadfd6-6fcd-4635-ad20-c2358ff7ed32"
 authors = ["Isaia Nisoli"]
 version = "0.1.0"
 
+[deps]
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
 [compat]
 julia = "1.4.1"
 
