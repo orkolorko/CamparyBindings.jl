@@ -11,7 +11,7 @@ struct CamparyFloat{T,N}
 	end
 end
 
-merge(x::CamparyFloat{T,K}, y::CamparyFloat{T,L}) where {T,K,L} = CamparyFloat{T, K+L}([x.val ; y.val]) 
+merge(x::CamparyFloat{T,K}, y::CamparyFloat{T,L}) where {T,K,L} = CamparyFloat{K+L}([x.val ; y.val]) 
 
 
 
