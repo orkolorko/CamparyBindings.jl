@@ -1,3 +1,13 @@
+#Static Version
+struct SCamparyFloat{T, N} <: Real
+	val::SVector{N, T}
+	function SCamparyFloat{N}(v::V) where {T<:FloatTypes, N, V<:AbstractArray{T,1}}
+		@assert length(v)==N
+		new{T, N}(SVector{N, T}(v))
+	end
+end
+
+
 
 # This file contains code that may be worth preserving as a version check
 
@@ -86,4 +96,46 @@ end
 
 function _FastVecSumErrBranch!(x::CamparyFloat{T,K}, ::Val{R}, ::Val{false}) where {T, K, R}
 	@error "The result size is too big, $K < $R"
+end
+
+## Is it worth to use generated????
+@generated function VecSum(x::CamparyFloat{T,K}) where {T, K}
+	ex = quote end
+	push!(ex.args, quote
+			v = Array{$T}(undef, $K)
+			v[$K] = x[$K]
+		end)
+	for i in K-1:-1:1
+		push!(ex.args, 
+			quote
+				v[$i], v[$(i+1)] = TwoSum(x[$i], v[$(i+1)])
+			end)
+	end
+	push!(ex.args, 
+		quote
+			return CamparyFloat{$K}(v)
+		end)
+	return ex
+end
+
+@generated function FastVecSum(x::CamparyFloat{T,K}) where {T, K}
+	ex = quote end
+	push!(ex.args,
+		quote
+			v = Array{$T}(undef, $K)
+			v[$K] = x[$K]
+		end
+		)
+
+	for i in K-1:-1:1
+		push!(ex.args, 
+			quote
+				v[$i], v[$(i+1)] = FastTwoSum(x[$i], v[$(i+1)])
+			end)
+	end
+	push!(ex.args, 
+		quote
+			return CamparyFloat{$K}(v)
+		end)
+	return ex
 end
