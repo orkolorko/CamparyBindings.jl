@@ -225,3 +225,8 @@ function Renorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R}
 	x = VecSum(x)
 	return  VecSumErrBranch(x, r)
 end
+
+function FastRenorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R}
+	x = FastVecSum(x)
+	return  FastVecSumErrBranch(x, r)
+end
