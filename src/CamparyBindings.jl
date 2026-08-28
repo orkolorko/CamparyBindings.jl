@@ -1,5 +1,7 @@
 module CamparyBindings
-using CuArrays
+using CUDA
+
+CuVector = CuArray
 
 
 include("ErrorFree.jl")
