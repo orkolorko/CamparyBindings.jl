@@ -42,51 +42,19 @@ CuCamparyFloat{T₁,N}
 
 
 
-# we allow upward conversion of CamparyFloat types, i.e., bigger number of limbs
-@generated function Base.convert(::Type{CamparyFloat{T, N}}, x::T₂) where {T<:Union{Float32, Float64}, M, N, T₂<:CamparyFloat{T,M}}
-	if N>=M
-		if M == 1
-			exp = quote
-				v = zeros($T, $N)
-				v[1] = x.val[1]
-				return CamparyFloat{$N}(v)
-			end
-			return exp
-		end
-		if M != 1
-			exp = quote
-				v = zeros($T, $N)
-				v[1:$M] = x.val[1:$M]
-				return CamparyFloat{$N}(v)
-			end
-			return exp
-		end
-	else
-		@error "Invalid conversion since $M > $N"
-	end
+# Upward conversion of CamparyFloat types, i.e., to a bigger number of limbs: the extra
+# limbs are zero, so the value is unchanged. Conversion to fewer limbs would round, and
+# is refused; use `Renorm(x, Val(N))` for that.
+function Base.convert(::Type{CamparyFloat{T, N}}, x::CamparyFloat{T, M}) where {T<:FloatTypes, M, N}
+	N >= M || throw(ArgumentError("cannot convert a $M-limb CamparyFloat to $N limbs without rounding; use Renorm"))
+	v = zeros(T, N)
+	v[1:M] = x.val
+	return CamparyFloat{N}(v)
 end
 
-@generated function Base.convert(::Type{CuCamparyFloat{T, N}}, x::T₂) where {T<:Union{Float32, Float64}, M, N, T₂<:CamparyFloat{T,M}}
-	if N>=M
-		if M == 1
-			exp = quote
-				v = zeros($T, $N)
-				v[1] = x.val[1]
-				return CuCamparyFloat{$N}(v)
-			end
-			return exp
-		end
-		if M != 1
-			exp = quote
-				v = zeros($T, $N)
-				v[1:$M] = x.val[1:$M]
-				return CuCamparyFloat{$N}(v)
-			end
-			return exp
-		end
-	else
-		@error "Invalid conversion since $M > $N"
-	end
+function Base.convert(::Type{CuCamparyFloat{T, N}}, x::CamparyFloat{T, M}) where {T<:FloatTypes, M, N}
+	N >= M || throw(ArgumentError("cannot convert a $M-limb CamparyFloat to $N limbs without rounding; use Renorm"))
+	v = zeros(T, N)
+	v[1:M] = x.val
+	return CuCamparyFloat{N}(v)
 end
-
-

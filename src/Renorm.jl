@@ -1,58 +1,53 @@
-function FastVecSum!(x::CamparyFloatTypes{T, K}) where {T, K}
-	s, x[K] = FastTwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, x[i+1] =FastTwoSum(x[i], s)
-	end
-	x[1], x[2] = FastTwoSum(x[1], s)
-	return x
-end
+# Renormalisation of floating-point expansions.
+#
+# [BJMP17] S. Boldo, M. Joldes, J.-M. Muller, V. Popescu, "Formal verification of a
+#          floating-point expansion renormalization algorithm", Interactive Theorem
+#          Proving (ITP 2017), LNCS, pp. 98--113, doi:10.1007/978-3-319-66107-0_7.
+# [JMMP16] M. Joldes, O. Marty, J.-M. Muller, V. Popescu, "Arithmetic algorithms for
+#          extended precision using floating-point expansions", IEEE Transactions on
+#          Computers 65 (2016), pp. 1197--1210, doi:10.1109/tc.2015.2441714.
+# [P17]    V. Popescu, "Towards fast and certified multiple-precision libraries",
+#          PhD thesis, ENS Lyon (2017), HAL tel-01534090.
 
-function FastVecSum(x::CamparyFloatTypes{T, K}) where {T, K}
-	r = Vector{T}(undef, K)
-	s, r[K] = FastTwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, r[i+1] =FastTwoSum(x[i], s)
-	end
-	r[1], r[2] = FastTwoSum(x[1], s)
-	return CamparyFloat{K}(r)
-end
+"""
+    FastVecSum(x)
+    FastVecSum(x, r)
+    FastVecSum!(x)
 
+[`VecSum`](@ref) with `FastTwoSum` in place of `TwoSum`. [BJMP17] proves the substitution
+admissible for input that overlaps by at most `d <= p-2` digits.
+"""
 function FastVecSum(x::CamparyFloatTypes{T, K}, r::CamparyFloat{T, K}) where {T, K}
-	s, r[K] = FastTwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, r[i+1] =FastTwoSum(x[i], s)
+	s = x[K]
+	for i in K-1:-1:1
+		s, r[i+1] = FastTwoSum(x[i], s)
 	end
-	r[1], r[2] = FastTwoSum(x[1], s)
+	r[1] = s
 	return r
 end
+FastVecSum(x::CamparyFloatTypes{T, K}) where {T, K} = FastVecSum(x, CamparyFloat{K}(Vector{T}(undef, K)))
+FastVecSum!(x::CamparyFloat{T, K}) where {T, K} = FastVecSum(x, x)
 
-function VecSum!(x::CamparyFloatTypes{T, K}) where {T, K}
-	s, x[K] = TwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, x[i+1] =TwoSum(x[i], s)
-	end
-	x[1], x[2] = TwoSum(x[1], s)
-	return x
-end
+"""
+    VecSum(x)
+    VecSum(x, r)
+    VecSum!(x)
 
-function VecSum(x::CamparyFloatTypes{T, K}) where {T, K}
-	r = Vector{T}(undef, K)
-	s, r[K] = TwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, r[i+1] =TwoSum(x[i], s)
-	end
-	r[1], r[2] = TwoSum(x[1], s)
-	return CamparyFloat{K}(r) 
-end
-
+Algorithm 4 of [BJMP17] (Algorithm 21 of [P17]): the chain of `TwoSum` from the least
+significant term, `s_{n-1} = x_{n-1}`, `(s_i, e_{i+1}) = 2Sum(x_i, s_{i+1})`, `e_0 = s_0`.
+Error-free: the exact sum of the output equals the exact sum of `x`. The second form
+writes into `r`, the third into `x`.
+"""
 function VecSum(x::CamparyFloatTypes{T, K}, r::CamparyFloat{T, K}) where {T, K}
-	s, r[K] = TwoSum(x[K-1], x[K])
-	for i in K-2:-1:2
-		s, r[i+1] =TwoSum(x[i], s)
+	s = x[K]
+	for i in K-1:-1:1
+		s, r[i+1] = TwoSum(x[i], s)
 	end
-	r[1], r[2] = TwoSum(x[1], s)
+	r[1] = s
 	return r
 end
+VecSum(x::CamparyFloatTypes{T, K}) where {T, K} = VecSum(x, CamparyFloat{K}(Vector{T}(undef, K)))
+VecSum!(x::CamparyFloat{T, K}) where {T, K} = VecSum(x, x)
 
 
 # This functions add a CamparyFloat and a float and return a CamparyFloat{K+1}
@@ -62,65 +57,40 @@ end
 issuccessor(::Val{K}, ::Val{L}) where {K, L} = Val(K-1==L)
 
 function VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T, r::CamparyFloatTypes{T, L}) where {T,K,L}
-	return _VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T, r::CamparyFloatTypes{T, L}, issuccessor(Val(L), Val(K)))
+	return _VecSum4Add1(x, y, r, issuccessor(Val(L), Val(K)))
 end
 
 function _VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T, r::CamparyFloatTypes{T, L}, ::Val{true}) where {T,K, L}
-	s, r[K+1] = TwoSum(x[K], y)
-	for i in K-1:-1:2
+	s = y
+	for i in K:-1:1
 		s, r[i+1] = TwoSum(x[i], s)
 	end
-	r[1], r[2] = TwoSum(x[1], s)
+	r[1] = s
 	return r
-end 
+end
 
 function _VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T, r::CamparyFloatTypes{T, L}, ::Val{false}) where {T,K, L}
-	@error "Incompatible sizes $L != $K +1" 
-end 
-
-
-function VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T) where{T, K}
-	r = Vector{T}(undef, K+1)
-	s, r[K+1] = TwoSum(x[K], y)
-	for i in K-1:-1:2
-		s, r[i+1] = TwoSum(x[i], s)
-	end
-	r[1], r[2] = TwoSum(x[1], s)
-	return CamparyFloat{K+1}(r)
-end 
-
-# this is another form of the same algorithm, from 
-# Formal Verification of a Floating-Point Expansion
-# Renormalization Algorithm by 
-# Sylvie Boldo, Mioara Joldes, Jean-Michel Muller, Valentina Popescu
-#
-## I could reuse some code here
-function VecSumErrBranch(x::CamparyFloat{T,K}, ::Val{R}) where {T, K, R}
-	# no check needed, the allocation is here
- 	r = zeros(T, R)	
-	
-	j = 1	
-	err = x[1]
-	for i in 1:K-1
-		r[j], err = TwoSum(err, x[i+1])
-		if err != zero(T)
-			if j>=R
-				return r
-			end
-			j+= 1
-		else
-			err = r[j]
-		end
-	end
-	if err !=zero(T) && j<=R
-		r[j]=err
-	end
-	return CamparyFloat{R}(r)
+	throw(DimensionMismatch("the output has $L limbs, it must have $K + 1"))
 end
 
+VecSum4Add1(x::CamparyFloatTypes{T, K}, y::T) where {T, K} =
+	_VecSum4Add1(x, y, CamparyFloat{K+1}(Vector{T}(undef, K+1)), Val(true))
+
+"""
+    VecSumErrBranch(e, Val(m))
+    VecSumErrBranch(e, r)
+
+Algorithm 5 of [BJMP17] (Algorithm 22 of [P17]): a chain of `TwoSum` from the most
+significant term that propagates the error, or the sum when the error is zero, and stops
+once `m` output terms are filled. For S-nonoverlapping input the output `f` satisfies
+`|f_{j+1}| <= ulp(f_j)` (Proposition 34 of [BJMP17]). Unfilled output limbs are zero. The
+second form writes into `r` and takes `m` from its number of limbs.
+"""
+VecSumErrBranch(x::CamparyFloat{T,K}, ::Val{R}) where {T, K, R} = VecSumErrBranch(x, CamparyFloat{R}(zeros(T, R)))
+
 function VecSumErrBranch(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T, K, R}
-	# no check needed, the allocation is here
-	j = 1	
+	fill!(r.val, zero(T))
+	j = 1
 	err = x[1]
 	for i in 1:K-1
 		r[j], err = TwoSum(err, x[i+1])
@@ -139,7 +109,15 @@ function VecSumErrBranch(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T, K
 	return r
 end
 
-### Even if it is called Fast, the speed seems to be the same
+"""
+    FastVecSumErrBranch(e, Val(m))
+    FastVecSumErrBranch(e, r)
+
+`VecSumErrBranch` with `FastTwoSum` in place of `TwoSum`, which [BJMP17] proves
+admissible for this level. The control flow is that of Algorithm 5 written as a single
+loop; unfilled output limbs are zero. (Author's note: even if it is called Fast, the speed
+seems to be the same.)
+"""
 function FastVecSumErrBranch(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T, K, R}
  	# in this case the check is done in the calling function
 
@@ -195,38 +173,42 @@ function FastVecSumErrBranch(x::CamparyFloat{T,K}, ::Val{R}) where {T, K, R}
  	return CamparyFloat{R}(r)
 end
 
-function VecSumErr!(x::CamparyFloat{T,K}) where{T,K}
-	for i in 2:K-1
-		x[i-1], err = TwoSum(err, x[i])
-	end
-	x[K-1], x[K] = TwoSum(err, x[K])
-	return x 
-end
+"""
+    VecSumErr!(f)
+    VecSumErr(f, g)
 
-function VecSumErr(x::CamparyFloat{T,K}, r::CamparyFloat{T,K}) where{T,K}
-	for i in 2:K-1
-		r[i-1], err = TwoSum(err, x[i])
+Algorithm 8 of [JMMP16], the third level of the renormalisation: `r_0 = f_0`,
+`(g_i, r_{i+1}) = 2Sum(r_i, f_{i+1})` for `i = 0, ..., m-1`, `g_m = r_m`. Error-free.
+"""
+function VecSumErr(x::CamparyFloat{T,K}, r::CamparyFloat{T,K}) where {T,K}
+	err = x[1]
+	for i in 1:K-1
+		r[i], err = TwoSum(err, x[i+1])
 	end
-	r[K-1], r[K] = TwoSum(err, x[K])
+	r[K] = err
 	return r
 end
+VecSumErr!(x::CamparyFloat{T,K}) where {T,K} = VecSumErr(x, x)
 
-# Renormalization algorithm, from 
-# Formal Verification of a Floating-Point Expansion
-# Renormalization Algorithm by 
-# Sylvie Boldo, Mioara Joldes, Jean-Michel Muller, Valentina Popescu
+"""
+    Renorm(x, Val(m))
+    Renorm(x, r)
 
-function Renorm(x::CamparyFloat{T,K}, ::Val{R}) where {T,K,R}
-	x = VecSum(x)
-	return  VecSumErrBranch(x, Val(R))
-end
+Algorithm 3 of [BJMP17] (Algorithm 24 of [P17]): `VecSum` followed by `VecSumErrBranch`.
+If the terms of `x` overlap by at most `d <= p-2` digits in Priest's sense (which
+requires them in decreasing order of magnitude, up to interleaving zeros), the result is
+a truncation to `m` terms of an ulp-nonoverlapping expansion with the same exact sum as
+`x` (Proposition 32 of [BJMP17], with a Coq proof there).
+"""
+Renorm(x::CamparyFloat{T,K}, ::Val{R}) where {T,K,R} = VecSumErrBranch(VecSum(x), Val(R))
+Renorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R} = VecSumErrBranch(VecSum(x), r)
 
-function Renorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R}
-	x = VecSum(x)
-	return  VecSumErrBranch(x, r)
-end
+"""
+    FastRenorm(x, Val(m))
+    FastRenorm(x, r)
 
-function FastRenorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R}
-	x = FastVecSum(x)
-	return  FastVecSumErrBranch(x, r)
-end
+`Renorm` with `FastTwoSum` throughout, which [BJMP17] proves admissible under the same
+hypothesis.
+"""
+FastRenorm(x::CamparyFloat{T,K}, r::CamparyFloat{T,R}) where {T,K,R} = FastVecSumErrBranch(FastVecSum(x), r)
+FastRenorm(x::CamparyFloat{T,K}, ::Val{R}) where {T,K,R} = FastVecSumErrBranch(FastVecSum(x), Val(R))
