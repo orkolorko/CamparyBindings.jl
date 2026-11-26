@@ -58,3 +58,22 @@ function Base.convert(::Type{CuCamparyFloat{T, N}}, x::CamparyFloat{T, M}) where
 	v[1:M] = x.val
 	return CuCamparyFloat{N}(v)
 end
+
+"""
+    is_ulp_nonoverlapping(x)
+
+Whether the limbs of `x` satisfy `|x_{i+1}| <= ulp(x_i)` for every `i`, Definition 26 of
+Boldo, Joldes, Muller, Popescu (ITP 2017); Definition 2.6 of Muller, Popescu, Tang
+(ARITH 2016). The check is exact: `eps(z)` is `ulp(z)` for a normal `z`, and a zero limb
+must be followed by zeros.
+"""
+function is_ulp_nonoverlapping(x::CamparyFloat{T,K}) where {T,K}
+	for i in 1:K-1
+		if x[i] == zero(T)
+			x[i+1] == zero(T) || return false
+		elseif !(abs(x[i+1]) <= eps(x[i]))
+			return false
+		end
+	end
+	return true
+end

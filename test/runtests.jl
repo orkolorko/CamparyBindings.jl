@@ -25,8 +25,7 @@ function rand_expansion(::Type{T}, K; e = 0) where {T}
 	return C.CamparyFloat{K}(v)
 end
 
-# Proposition 34 of Boldo-Joldes-Muller-Popescu (ITP 2017): |f_{j+1}| <= ulp(f_j).
-is_ulp_nonoverlapping(f) = all(abs(f[j+1]) <= eps(f[j]) for j in 1:length(f)-1)
+const is_ulp_nonoverlapping = C.is_ulp_nonoverlapping
 
 Random.seed!(20261126)
 
@@ -176,6 +175,63 @@ end
 	@test y.val == [x.val; zeros(T, 2)]
 	@test_throws ArgumentError convert(C.CamparyFloat{T, 2}, x)
 	@test convert(C.CamparyFloat{T, 3}, T(2)).val == T[2, 0, 0]
+end
+
+
+@testset "is_ulp_nonoverlapping" begin
+	@test is_ulp_nonoverlapping(C.CamparyFloat{3}([1.0, eps(1.0), eps(eps(1.0))]))
+	@test !is_ulp_nonoverlapping(C.CamparyFloat{2}([1.0, nextfloat(eps(1.0))]))
+	@test is_ulp_nonoverlapping(C.CamparyFloat{3}([1.0, 0.0, 0.0]))
+	@test !is_ulp_nonoverlapping(C.CamparyFloat{3}([1.0, 0.0, 1e-300]))
+end
+
+# A literal scalar transcription of Algorithm 41 of Popescu's thesis (PMultiplication),
+# lanes 0, ..., r-1 stored at indices 1, ..., r, line 18 read as x times y_{r-1}.
+function alg41_scalar(x::Vector{T}, y::Vector{T}) where {T}
+	r = length(x); s = zeros(T, r); π = zeros(T, r)
+	for i in 0:r-2
+		pe = [TwoProd(x[k], y[i+1]) for k in 1:r]; p = first.(pe); e = last.(pe)
+		se = [TwoSum(s[k], p[k]) for k in 1:r]; s = first.(se); e′ = last.(se)
+		π[i+1] = s[1]
+		s = [s[2:end]; zero(T)]
+		while any(!=(0), e)
+			se = [TwoSum(s[k], e[k]) for k in 1:r]; s = first.(se); e = last.(se)
+			e = [zero(T); e[1:end-1]]
+		end
+		while any(!=(0), e′)
+			se = [TwoSum(s[k], e′[k]) for k in 1:r]; s = first.(se); e′ = last.(se)
+			e′ = [zero(T); e′[1:end-1]]
+		end
+	end
+	s = s .+ x .* y[r]
+	π[r] = s[1]
+	return π
+end
+
+@testset "data-parallel multiplication, Algorithm 41 ($T)" for T in (Float64, Float32)
+	for r in 1:(T == Float64 ? 16 : 6), _ in 1:300
+		x, y = rand_expansion(T, r), rand_expansion(T, r; e = rand(-5:5))
+		π = C.PMultiplication(x, y)
+		@test π isa C.CamparyFloat{T, r}
+		@test π.val == alg41_scalar(x.val, y.val)
+		r == 1 && @test π.val == [x[1] * y[1]]
+	end
+	# the cap on the inner loops: a non-finite input does not hang
+	@test !all(isfinite, C.PMultiplication(C.CamparyFloat{3}(T[Inf, 0, 0]), C.CamparyFloat{3}(T[1, 0, 0])).val)
+end
+
+# Theorem 4.2.1 of Popescu's thesis does not hold for this r = 2 input; recorded so that
+# a change to PMultiplication or to the reading of the theorem shows up here.
+@testset "Theorem 4.2.1 counterexample" begin
+	x = C.CamparyFloat{2}([1.2052776966458982, -1.980988149935599e-16])
+	y = C.CamparyFloat{2}([0.016518450532383697, -3.2475787651990608e-18])
+	@test is_ulp_nonoverlapping(x) && is_ulp_nonoverlapping(y)
+	π = C.PMultiplication(x, y)
+	p, r = big(53), big(2)
+	a = abs(BigFloat(x[1]) * BigFloat(y[1]))
+	rhs = a * BigFloat(2)^(-(p - 1) * r) * (BigFloat(128) / 127 * (2r - 1) - BigFloat(129) / 254 * r +
+		BigFloat(2)^(-p - r + 2) * (r^2 - r) * factorial(r)^2)
+	@test abs(exact(x) * exact(y) - exact(π)) > rhs
 end
 
 end

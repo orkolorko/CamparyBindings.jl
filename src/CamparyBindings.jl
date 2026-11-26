@@ -9,6 +9,7 @@ include("Constructor.jl")
 include("Addition.jl")
 include("Renorm.jl")
 include("PAddition.jl")
+include("PMultiplication.jl")
 
 export CamparyFloat, FastTwoSum, FastTwoDiff, TwoSum, TwoProd, VecSum, VecSum!, FastVecSum, FastVecSum!
 
